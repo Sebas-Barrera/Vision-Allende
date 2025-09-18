@@ -5,7 +5,9 @@
 /.pnp
 .pnp.js
 .yarn/install-state.gz
-/database.sql
+
+# Ignorar base de datos
+database.sql
 
 # testing
 /coverage
