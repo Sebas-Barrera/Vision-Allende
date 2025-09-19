@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ejecutarConsulta } from "@/lib/conexion-bd";
+import { ejecutarConsulta, ejecutarTransaccion } from "@/lib/conexion-bd";
 import { validarCliente, limpiarDatos } from "@/lib/validaciones";
 
 // GET - Obtener cliente por ID con información completa

@@ -302,19 +302,20 @@ export default function PaginaDetalleCliente() {
                           d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                         />
                       </svg>
-                      Registrado: {formatearFecha(cliente.fecha_creacion)}
+                      Registrado: {formatearFecha(cliente.fecha_registro)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              {/* Botones de acción */}
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <Link
                   href={`/clientes/${clienteId}/graduacion`}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-[#095a6d] to-[#0a4a5c] text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200"
+                  className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-[#095a6d] to-[#0a4a5c] text-white font-medium rounded-xl hover:shadow-lg transition-all duration-200 min-h-[44px]"
                 >
                   <svg
-                    className="w-4 h-4 mr-2"
+                    className="w-4 h-4 mr-2 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -332,14 +333,15 @@ export default function PaginaDetalleCliente() {
                       d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                     />
                   </svg>
-                  Graduaciones
+                  <span className="whitespace-nowrap">Graduaciones</span>
                 </Link>
+
                 <Link
                   href={`/clientes/${clienteId}/nueva-venta`}
-                  className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors duration-200"
+                  className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors duration-200 min-h-[44px]"
                 >
                   <svg
-                    className="w-4 h-4 mr-2"
+                    className="w-4 h-4 mr-2 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -351,14 +353,15 @@ export default function PaginaDetalleCliente() {
                       d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m0 0L17 18M9.5 18h7.5"
                     />
                   </svg>
-                  Nueva Venta
+                  <span className="whitespace-nowrap">Nueva Venta</span>
                 </Link>
+
                 <button
                   onClick={() => router.push(`/clientes/${clienteId}/editar`)}
-                  className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors duration-200"
+                  className="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors duration-200 min-h-[44px]"
                 >
                   <svg
-                    className="w-4 h-4 mr-2"
+                    className="w-4 h-4 mr-2 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -370,7 +373,7 @@ export default function PaginaDetalleCliente() {
                       d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                     />
                   </svg>
-                  Editar
+                  <span className="whitespace-nowrap">Editar</span>
                 </button>
               </div>
             </div>
