@@ -36,7 +36,7 @@ export default function FormularioVenta({
   });
 
   // Opciones de laboratorio
-  const laboratorios = ["Laboratorio 1", "Laboratorio 2", "Laboratorio 3"];
+  const laboratorios = ["Essilor", "Augen", "Eva"];
 
   // Estados posibles de la venta
   const estadosVenta = [
