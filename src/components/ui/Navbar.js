@@ -63,7 +63,6 @@ export default function Navbar({ onToggleSidebar }) {
         {/* Área derecha */}
         <div className="ml-4 flex items-center space-x-4">
           {/* Botones de acceso rápido */}
-          {/* Botones de acceso rápido */}
           <div className="hidden md:flex items-center space-x-2">
             <Link
               href="/clientes/nuevo"

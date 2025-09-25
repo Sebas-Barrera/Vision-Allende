@@ -1,3 +1,4 @@
+import { parsearDinero, restarDinero, sumarDinero } from "@/lib/dinero-utils";
 // === VALIDACIONES PARA SISTEMA ÓPTICA ===
 
 /**
@@ -408,9 +409,8 @@ export function validarVenta(datos) {
 
   // Validación adicional: costo total debe ser suma de armazón + micas
   if (datos.precio_armazon && datos.precio_micas && datos.costo_total) {
-    const suma =
-      parseFloat(datos.precio_armazon) + parseFloat(datos.precio_micas);
-    const total = parseFloat(datos.costo_total);
+    const suma = sumarDinero(datos.precio_armazon, datos.precio_micas);
+    const total = parsearDinero(datos.costo_total);
 
     if (Math.abs(suma - total) > 0.01) {
       if (!resultado.errores.costo_total) resultado.errores.costo_total = [];
@@ -432,9 +432,10 @@ export function validarDeposito(datos, costoTotalVenta, totalDepositado = 0) {
 
   // Validación adicional: depósito no puede exceder el saldo restante
   if (datos.monto && costoTotalVenta) {
-    const saldoRestante =
-      parseFloat(costoTotalVenta) - parseFloat(totalDepositado);
-    const montoDeposito = parseFloat(datos.monto);
+    const costoTotal = parsearDinero(costoTotalVenta);
+    const totalDepositadoParsed = parsearDinero(totalDepositado);
+    const saldoRestante = restarDinero(costoTotal, totalDepositadoParsed);
+    const montoDeposito = parsearDinero(datos.monto);
 
     if (montoDeposito > saldoRestante && saldoRestante > 0.01) {
       if (!resultado.errores.monto) resultado.errores.monto = [];

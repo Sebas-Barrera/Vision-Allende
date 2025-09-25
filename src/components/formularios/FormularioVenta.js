@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { parsearDinero, sumarDinero, restarDinero } from "@/lib/dinero-utils";
 import Link from "next/link";
 
 export default function FormularioVenta({
@@ -40,11 +41,27 @@ export default function FormularioVenta({
 
   // Estados posibles de la venta
   const estadosVenta = [
-    { valor: "pendiente", label: "Pendiente", color: "bg-yellow-100 text-yellow-800" },
-    { valor: "en_laboratorio", label: "En Laboratorio", color: "bg-blue-100 text-blue-800" },
+    {
+      valor: "pendiente",
+      label: "Pendiente",
+      color: "bg-yellow-100 text-yellow-800",
+    },
+    {
+      valor: "en_laboratorio",
+      label: "En Laboratorio",
+      color: "bg-blue-100 text-blue-800",
+    },
     { valor: "listo", label: "Listo", color: "bg-green-100 text-green-800" },
-    { valor: "entregado", label: "Entregado", color: "bg-gray-100 text-gray-800" },
-    { valor: "cancelado", label: "Cancelado", color: "bg-red-100 text-red-800" },
+    {
+      valor: "entregado",
+      label: "Entregado",
+      color: "bg-gray-100 text-gray-800",
+    },
+    {
+      valor: "cancelado",
+      label: "Cancelado",
+      color: "bg-red-100 text-red-800",
+    },
   ];
 
   // Cargar datos iniciales
@@ -67,9 +84,13 @@ export default function FormularioVenta({
         deposito_inicial: ventaExistente.deposito_inicial?.toString() || "",
         saldo_restante: ventaExistente.saldo_restante?.toString() || "",
         estado: ventaExistente.estado || "pendiente",
-        fecha_venta: ventaExistente.fecha_venta?.split("T")[0] || new Date().toISOString().split("T")[0],
-        fecha_llegada_laboratorio: ventaExistente.fecha_llegada_laboratorio?.split("T")[0] || "",
-        fecha_entrega_cliente: ventaExistente.fecha_entrega_cliente?.split("T")[0] || "",
+        fecha_venta:
+          ventaExistente.fecha_venta?.split("T")[0] ||
+          new Date().toISOString().split("T")[0],
+        fecha_llegada_laboratorio:
+          ventaExistente.fecha_llegada_laboratorio?.split("T")[0] || "",
+        fecha_entrega_cliente:
+          ventaExistente.fecha_entrega_cliente?.split("T")[0] || "",
         notas: ventaExistente.notas || "",
       });
 
@@ -81,26 +102,26 @@ export default function FormularioVenta({
 
   // Calcular saldo restante automáticamente
   useEffect(() => {
-    const costoTotal = parseFloat(datosVenta.costo_total) || 0;
-    const deposito = parseFloat(datosVenta.deposito_inicial) || 0;
-    const saldo = costoTotal - deposito;
-    
-    setDatosVenta(prev => ({
+    const costoTotal = parsearDinero(datosVenta.costo_total);
+    const deposito = parsearDinero(datosVenta.deposito_inicial);
+    const saldo = restarDinero(costoTotal, deposito);
+
+    setDatosVenta((prev) => ({
       ...prev,
-      saldo_restante: saldo >= 0 ? saldo.toString() : "0"
+      saldo_restante: saldo >= 0 ? saldo.toString() : "0",
     }));
   }, [datosVenta.costo_total, datosVenta.deposito_inicial]);
 
   // Calcular costo total automáticamente
   useEffect(() => {
-    const precioArmazon = parseFloat(datosVenta.precio_armazon) || 0;
-    const precioMicas = parseFloat(datosVenta.precio_micas) || 0;
-    const total = precioArmazon + precioMicas;
-    
+    const precioArmazon = parsearDinero(datosVenta.precio_armazon);
+    const precioMicas = parsearDinero(datosVenta.precio_micas);
+    const total = sumarDinero(precioArmazon, precioMicas);
+
     if (total > 0) {
-      setDatosVenta(prev => ({
+      setDatosVenta((prev) => ({
         ...prev,
-        costo_total: total.toString()
+        costo_total: total.toString(),
       }));
     }
   }, [datosVenta.precio_armazon, datosVenta.precio_micas]);
@@ -122,8 +143,8 @@ export default function FormularioVenta({
 
   const cargarClientes = async (termino = "") => {
     try {
-      const url = termino 
-        ? `/api/clientes?buscar=${encodeURIComponent(termino)}` 
+      const url = termino
+        ? `/api/clientes?buscar=${encodeURIComponent(termino)}`
         : `/api/clientes`;
 
       const respuesta = await fetch(url, {
@@ -151,24 +172,24 @@ export default function FormularioVenta({
 
   const manejarCambio = (evento) => {
     const { name, value } = evento.target;
-    setDatosVenta(prev => ({
+    setDatosVenta((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
 
     if (errores[name]) {
-      setErrores(prev => ({
+      setErrores((prev) => ({
         ...prev,
-        [name]: ""
+        [name]: "",
       }));
     }
   };
 
   const manejarSeleccionCliente = (clienteSeleccionado) => {
     setCliente(clienteSeleccionado);
-    setDatosVenta(prev => ({
+    setDatosVenta((prev) => ({
       ...prev,
-      cliente_id: clienteSeleccionado.id
+      cliente_id: clienteSeleccionado.id,
     }));
     setClientes([]);
     setBusquedaCliente("");
@@ -178,9 +199,9 @@ export default function FormularioVenta({
     const archivo = evento.target.files[0];
     if (archivo) {
       if (archivo.size > 10 * 1024 * 1024) {
-        setErrores(prev => ({
+        setErrores((prev) => ({
           ...prev,
-          archivo: "El archivo no debe exceder 10MB"
+          archivo: "El archivo no debe exceder 10MB",
         }));
         return;
       }
@@ -190,9 +211,9 @@ export default function FormularioVenta({
       setVistaPrevia(url);
 
       if (errores.archivo) {
-        setErrores(prev => ({
+        setErrores((prev) => ({
           ...prev,
-          archivo: ""
+          archivo: "",
         }));
       }
     }
@@ -209,8 +230,13 @@ export default function FormularioVenta({
       nuevosErrores.costo_total = "Costo total es requerido";
     }
 
-    if (datosVenta.deposito_inicial && parseFloat(datosVenta.deposito_inicial) > parseFloat(datosVenta.costo_total || 0)) {
-      nuevosErrores.deposito_inicial = "El depósito no puede ser mayor al costo total";
+    if (
+      datosVenta.deposito_inicial &&
+      parseFloat(datosVenta.deposito_inicial) >
+        parseFloat(datosVenta.costo_total || 0)
+    ) {
+      nuevosErrores.deposito_inicial =
+        "El depósito no puede ser mayor al costo total";
     }
 
     setErrores(nuevosErrores);
@@ -231,7 +257,7 @@ export default function FormularioVenta({
       const formData = new FormData();
 
       // Agregar datos del formulario
-      Object.keys(datosVenta).forEach(key => {
+      Object.keys(datosVenta).forEach((key) => {
         if (datosVenta[key] !== "") {
           formData.append(key, datosVenta[key]);
         }
@@ -242,7 +268,9 @@ export default function FormularioVenta({
         formData.append("imagen_receta", archivoReceta);
       }
 
-      const url = ventaExistente ? `/api/ventas/${ventaExistente.id}` : "/api/ventas";
+      const url = ventaExistente
+        ? `/api/ventas/${ventaExistente.id}`
+        : "/api/ventas";
       const metodo = ventaExistente ? "PUT" : "POST";
 
       const respuesta = await fetch(url, {
@@ -253,7 +281,11 @@ export default function FormularioVenta({
 
       if (respuesta.ok) {
         const datos = await respuesta.json();
-        setMensaje(ventaExistente ? "Venta actualizada exitosamente" : "Venta creada exitosamente");
+        setMensaje(
+          ventaExistente
+            ? "Venta actualizada exitosamente"
+            : "Venta creada exitosamente"
+        );
 
         setTimeout(() => {
           if (clienteId) {
@@ -282,22 +314,45 @@ export default function FormularioVenta({
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-[#095a6d] to-[#0c4a6e] rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Visión Allende</h1>
+                <h1 className="text-xl font-bold text-gray-900">
+                  Visión Allende
+                </h1>
                 <p className="text-xs text-gray-500">Sistema de Gestión</p>
               </div>
             </Link>
 
             <nav className="flex items-center space-x-6">
-              <Link href="/clientes" className="text-gray-600 hover:text-[#095a6d] transition-colors">
+              <Link
+                href="/clientes"
+                className="text-gray-600 hover:text-[#095a6d] transition-colors"
+              >
                 Clientes
               </Link>
-              <Link href="/ventas" className="text-gray-600 hover:text-[#095a6d] transition-colors">
+              <Link
+                href="/ventas"
+                className="text-gray-600 hover:text-[#095a6d] transition-colors"
+              >
                 Ventas
               </Link>
             </nav>
@@ -308,13 +363,37 @@ export default function FormularioVenta({
       <main className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         {/* Breadcrumbs */}
         <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-8">
-          <Link href="/" className="hover:text-[#095a6d]">Dashboard</Link>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          <Link href="/" className="hover:text-[#095a6d]">
+            Dashboard
+          </Link>
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
           </svg>
-          <Link href="/ventas" className="hover:text-[#095a6d]">Ventas</Link>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          <Link href="/ventas" className="hover:text-[#095a6d]">
+            Ventas
+          </Link>
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
           </svg>
           <span className="text-gray-900 font-medium">
             {ventaExistente ? "Editar Venta" : "Nueva Venta"}
@@ -324,34 +403,60 @@ export default function FormularioVenta({
         {/* Encabezado */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#095a6d] to-[#0c4a6e] rounded-2xl mb-6">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            <svg
+              className="w-8 h-8 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+              />
             </svg>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             {ventaExistente ? "Actualizar Venta" : "Nueva Venta"}
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            {ventaExistente 
+            {ventaExistente
               ? "Modifica los detalles de la venta existente"
-              : "Complete la información de la nueva venta para el cliente"
-            }
+              : "Complete la información de la nueva venta para el cliente"}
           </p>
         </div>
 
         {/* Mensajes */}
         {mensaje && (
-          <div className={`mb-6 p-4 rounded-xl border ${
-            mensaje.includes("Error") 
-              ? "bg-red-50 border-red-200 text-red-800" 
-              : "bg-green-50 border-green-200 text-green-800"
-          }`}>
+          <div
+            className={`mb-6 p-4 rounded-xl border ${
+              mensaje.includes("Error")
+                ? "bg-red-50 border-red-200 text-red-800"
+                : "bg-green-50 border-green-200 text-green-800"
+            }`}
+          >
             <div className="flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 {mensaje.includes("Error") ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 )}
               </svg>
               {mensaje}
@@ -365,8 +470,18 @@ export default function FormularioVenta({
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-lg">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
                 </svg>
               </div>
               <div>
@@ -399,9 +514,12 @@ export default function FormularioVenta({
                         onClick={() => manejarSeleccionCliente(clienteItem)}
                         className="w-full p-4 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
                       >
-                        <div className="font-medium text-gray-900">{clienteItem.nombre_completo}</div>
+                        <div className="font-medium text-gray-900">
+                          {clienteItem.nombre_completo}
+                        </div>
                         <div className="text-sm text-gray-500">
-                          {clienteItem.expediente && `Exp: ${clienteItem.expediente}`}
+                          {clienteItem.expediente &&
+                            `Exp: ${clienteItem.expediente}`}
                           {clienteItem.email && ` • ${clienteItem.email}`}
                         </div>
                       </button>
@@ -421,7 +539,9 @@ export default function FormularioVenta({
                       {cliente?.nombre_completo || "Cliente Seleccionado"}
                     </h3>
                     <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                      {cliente?.expediente && <span>Exp: {cliente.expediente}</span>}
+                      {cliente?.expediente && (
+                        <span>Exp: {cliente.expediente}</span>
+                      )}
                       {cliente?.email && <span>{cliente.email}</span>}
                       {cliente?.telefono && <span>{cliente.telefono}</span>}
                     </div>
@@ -431,12 +551,22 @@ export default function FormularioVenta({
                       type="button"
                       onClick={() => {
                         setCliente(null);
-                        setDatosVenta(prev => ({ ...prev, cliente_id: "" }));
+                        setDatosVenta((prev) => ({ ...prev, cliente_id: "" }));
                       }}
                       className="text-gray-400 hover:text-gray-600"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
                       </svg>
                     </button>
                   )}
@@ -449,9 +579,24 @@ export default function FormularioVenta({
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-lg">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  />
                 </svg>
               </div>
               <div>
@@ -487,7 +632,9 @@ export default function FormularioVenta({
                 >
                   <option value="">Seleccionar laboratorio</option>
                   {laboratorios.map((lab, index) => (
-                    <option key={index} value={lab}>{lab}</option>
+                    <option key={index} value={lab}>
+                      {lab}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -545,13 +692,15 @@ export default function FormularioVenta({
                     step="0.01"
                     required
                     className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#095a6d] focus:border-transparent ${
-                      errores.costo_total ? 'border-red-500' : 'border-gray-300'
+                      errores.costo_total ? "border-red-500" : "border-gray-300"
                     }`}
                     placeholder="0.00"
                   />
                 </div>
                 {errores.costo_total && (
-                  <p className="text-red-600 text-sm mt-1">{errores.costo_total}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {errores.costo_total}
+                  </p>
                 )}
               </div>
 
@@ -569,13 +718,17 @@ export default function FormularioVenta({
                     min="0"
                     step="0.01"
                     className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#095a6d] focus:border-transparent ${
-                      errores.deposito_inicial ? 'border-red-500' : 'border-gray-300'
+                      errores.deposito_inicial
+                        ? "border-red-500"
+                        : "border-gray-300"
                     }`}
                     placeholder="0.00"
                   />
                 </div>
                 {errores.deposito_inicial && (
-                  <p className="text-red-600 text-sm mt-1">{errores.deposito_inicial}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {errores.deposito_inicial}
+                  </p>
                 )}
               </div>
             </div>
@@ -583,7 +736,9 @@ export default function FormularioVenta({
             {/* Saldo Restante (automático) */}
             <div className="mt-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Saldo Restante:</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Saldo Restante:
+                </span>
                 <span className="text-lg font-bold text-[#095a6d]">
                   ${parseFloat(datosVenta.saldo_restante || 0).toFixed(2)}
                 </span>
@@ -595,13 +750,27 @@ export default function FormularioVenta({
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-lg">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Receta Médica</h2>
-                <p className="text-gray-600">Subir imagen o archivo de la receta (opcional)</p>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Receta Médica
+                </h2>
+                <p className="text-gray-600">
+                  Subir imagen o archivo de la receta (opcional)
+                </p>
               </div>
             </div>
 
@@ -641,7 +810,9 @@ export default function FormularioVenta({
                     </label>
                     <p className="pl-1">o arrastrar y soltar</p>
                   </div>
-                  <p className="text-xs text-gray-500">PNG, JPG, PDF hasta 10MB</p>
+                  <p className="text-xs text-gray-500">
+                    PNG, JPG, PDF hasta 10MB
+                  </p>
                 </div>
               </div>
 
@@ -651,7 +822,9 @@ export default function FormularioVenta({
 
               {vistaPrevia && (
                 <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Vista previa:</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Vista previa:
+                  </h4>
                   <div className="max-w-xs">
                     <img
                       src={vistaPrevia}
@@ -668,12 +841,24 @@ export default function FormularioVenta({
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-lg">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
                 </svg>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Estado y Fechas</h2>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Estado y Fechas
+                </h2>
                 <p className="text-gray-600">Control del proceso de la venta</p>
               </div>
             </div>
@@ -742,13 +927,25 @@ export default function FormularioVenta({
           <div className="bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-gray-200 shadow-lg">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
                 </svg>
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Notas</h2>
-                <p className="text-gray-600">Información adicional sobre la venta</p>
+                <p className="text-gray-600">
+                  Información adicional sobre la venta
+                </p>
               </div>
             </div>
 
@@ -773,8 +970,18 @@ export default function FormularioVenta({
               href={clienteId ? `/clientes/${clienteId}` : "/ventas"}
               className="flex-1 inline-flex items-center justify-center px-8 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl transition-colors duration-200"
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
               </svg>
               Cancelar
             </Link>
@@ -793,8 +1000,18 @@ export default function FormularioVenta({
                 </div>
               ) : (
                 <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                   {ventaExistente ? "Actualizar Venta" : "Crear Venta"}
                 </>

@@ -9,10 +9,11 @@ const montserrat = Montserrat({
 
 export const metadata = {
   title: "Visión Allende - Sistema de Gestión",
-  description: "Sistema integral de gestión para óptica Visión Allende - Clientes, ventas y reportes",
+  description:
+    "Sistema integral de gestión para óptica Visión Allende - Clientes, ventas y reportes",
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico", 
+    icon: [{ url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" }],
+    shortcut: "/favicon.ico",
     apple: "/favicon.ico",
   },
 };
@@ -21,12 +22,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es-MX">
       <head>
-        {/* Múltiples referencias al favicon */}
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/nerd-glasses.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/nerd-glasses.png" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/nerd-glasses.png" />
+        {/* NO pongas nada aquí, Next.js maneja automáticamente metadata */}
       </head>
       <body className={`${montserrat.variable} font-sans antialiased`}>
         <div className="min-h-screen bg-neutral-50">{children}</div>

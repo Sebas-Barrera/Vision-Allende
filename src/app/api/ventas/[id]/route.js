@@ -121,6 +121,7 @@ export async function GET(request, { params }) {
 }
 
 // PUT - Actualizar venta específica
+// PUT - Actualizar venta específica
 export async function PUT(request, { params }) {
   try {
     const { id } = params;
@@ -133,16 +134,77 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Verificar que la venta existe
-    const verificarVenta = await ejecutarConsulta(
-      "SELECT id FROM ventas WHERE id = $1",
+    // ✅ CORRECCIÓN: Obtener datos actuales de la venta
+    const ventaActual = await ejecutarConsulta(
+      "SELECT * FROM ventas WHERE id = $1",
       [id]
     );
 
-    if (verificarVenta.rows.length === 0) {
+    if (ventaActual.rows.length === 0) {
       return NextResponse.json(
         { error: "Venta no encontrada" },
         { status: 404 }
+      );
+    }
+
+    const ventaExistente = ventaActual.rows[0];
+
+    // ✅ CORRECCIÓN: Usar valores existentes si no se proporcionan nuevos
+    const datosActualizados = {
+      marca_armazon:
+        datosOriginales.marca_armazon !== undefined
+          ? datosOriginales.marca_armazon
+          : ventaExistente.marca_armazon,
+      laboratorio:
+        datosOriginales.laboratorio !== undefined
+          ? datosOriginales.laboratorio
+          : ventaExistente.laboratorio,
+      precio_armazon:
+        datosOriginales.precio_armazon !== undefined
+          ? datosOriginales.precio_armazon
+            ? parseFloat(datosOriginales.precio_armazon)
+            : null
+          : ventaExistente.precio_armazon,
+      precio_micas:
+        datosOriginales.precio_micas !== undefined
+          ? datosOriginales.precio_micas
+            ? parseFloat(datosOriginales.precio_micas)
+            : null
+          : ventaExistente.precio_micas,
+      costo_total:
+        datosOriginales.costo_total !== undefined
+          ? parseFloat(datosOriginales.costo_total)
+          : ventaExistente.costo_total,
+      imagen_receta:
+        datosOriginales.imagen_receta !== undefined
+          ? datosOriginales.imagen_receta
+          : ventaExistente.imagen_receta,
+      estado:
+        datosOriginales.estado !== undefined
+          ? datosOriginales.estado
+          : ventaExistente.estado,
+      fecha_llegada_laboratorio:
+        datosOriginales.fecha_llegada_laboratorio !== undefined
+          ? datosOriginales.fecha_llegada_laboratorio
+          : ventaExistente.fecha_llegada_laboratorio,
+      fecha_entrega_cliente:
+        datosOriginales.fecha_entrega_cliente !== undefined
+          ? datosOriginales.fecha_entrega_cliente
+          : ventaExistente.fecha_entrega_cliente,
+      notas:
+        datosOriginales.notas !== undefined
+          ? datosOriginales.notas
+          : ventaExistente.notas,
+    };
+
+    // ✅ CORRECCIÓN: Validar que costo_total no sea NaN
+    if (
+      isNaN(datosActualizados.costo_total) ||
+      datosActualizados.costo_total <= 0
+    ) {
+      return NextResponse.json(
+        { error: "Costo total debe ser un número válido mayor a 0" },
+        { status: 400 }
       );
     }
 
@@ -166,52 +228,57 @@ export async function PUT(request, { params }) {
 
     const parametros = [
       id,
-      datosOriginales.marca_armazon || null,
-      datosOriginales.laboratorio || null,
-      datosOriginales.precio_armazon
-        ? parseFloat(datosOriginales.precio_armazon)
-        : null,
-      datosOriginales.precio_micas
-        ? parseFloat(datosOriginales.precio_micas)
-        : null,
-      parseFloat(datosOriginales.costo_total),
-      datosOriginales.imagen_receta || null,
-      datosOriginales.estado || "pendiente",
-      datosOriginales.fecha_llegada_laboratorio || null,
-      datosOriginales.fecha_entrega_cliente || null,
-      datosOriginales.notas || null,
+      datosActualizados.marca_armazon,
+      datosActualizados.laboratorio,
+      datosActualizados.precio_armazon,
+      datosActualizados.precio_micas,
+      datosActualizados.costo_total,
+      datosActualizados.imagen_receta,
+      datosActualizados.estado,
+      datosActualizados.fecha_llegada_laboratorio,
+      datosActualizados.fecha_entrega_cliente,
+      datosActualizados.notas,
     ];
 
     const resultado = await ejecutarConsulta(consultaActualizar, parametros);
 
-    // Recalcular saldo restante basado en depósitos existentes
-    const consultaRecalcular = `
-      UPDATE ventas 
-      SET 
-        total_depositado = (
-          SELECT COALESCE(SUM(monto), 0) 
-          FROM depositos 
-          WHERE venta_id = $1
-        ),
-        saldo_restante = costo_total - (
-          SELECT COALESCE(SUM(monto), 0) 
-          FROM depositos 
-          WHERE venta_id = $1
-        )
-      WHERE id = $1
-      RETURNING *
-    `;
+    // ✅ CORRECCIÓN: Validar que el costo_total existe antes del recálculo
+    const ventaActualizada = resultado.rows[0];
+    if (ventaActualizada && ventaActualizada.costo_total) {
+      // Recalcular saldo restante basado en depósitos existentes
+      const consultaRecalcular = `
+        UPDATE ventas 
+        SET 
+          total_depositado = (
+            SELECT COALESCE(SUM(monto), 0) 
+            FROM depositos 
+            WHERE venta_id = $1
+          ),
+          saldo_restante = costo_total - (
+            SELECT COALESCE(SUM(monto), 0) 
+            FROM depositos 
+            WHERE venta_id = $1
+          )
+        WHERE id = $1
+        RETURNING *
+      `;
 
-    const ventaActualizada = await ejecutarConsulta(consultaRecalcular, [id]);
+      const ventaFinal = await ejecutarConsulta(consultaRecalcular, [id]);
 
-    return NextResponse.json({
-      mensaje: "Venta actualizada exitosamente",
-      venta: ventaActualizada.rows[0],
-    });
+      return NextResponse.json({
+        mensaje: "Venta actualizada exitosamente",
+        venta: ventaFinal.rows[0],
+      });
+    } else {
+      return NextResponse.json({
+        mensaje: "Venta actualizada exitosamente",
+        venta: ventaActualizada,
+      });
+    }
   } catch (error) {
     console.error("Error actualizando venta:", error);
     return NextResponse.json(
-      { error: "Error actualizando venta" },
+      { error: "Error actualizando venta: " + error.message },
       { status: 500 }
     );
   }

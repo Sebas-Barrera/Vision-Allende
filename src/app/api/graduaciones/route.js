@@ -60,7 +60,21 @@ export async function GET(request) {
 // POST - Crear nueva graduación
 export async function POST(request) {
   try {
-    const datosOriginales = await request.json();
+    // Manejar FormData en lugar de JSON
+    const formData = await request.formData();
+
+    // Convertir FormData a objeto
+    const datosOriginales = {};
+    for (const [key, value] of formData.entries()) {
+      if (key === "imagen_resultado" && value instanceof File) {
+        // Manejar archivo de imagen si existe
+        if (value.size > 0) {
+          datosOriginales[key] = value;
+        }
+      } else {
+        datosOriginales[key] = value;
+      }
+    }
 
     // Limpiar y validar datos
     const datosLimpios = limpiarDatos(datosOriginales);
@@ -105,6 +119,29 @@ export async function POST(request) {
       );
     }
 
+    // Manejar subida de archivo si existe
+    let rutaImagen = null;
+    if (
+      datosOriginales.imagen_resultado &&
+      datosOriginales.imagen_resultado instanceof File
+    ) {
+      try {
+        // Por ahora, solo guardamos el nombre del archivo
+        rutaImagen = `graduaciones/${Date.now()}-${
+          datosOriginales.imagen_resultado.name
+        }`;
+
+        // TODO: Implementar subida real del archivo al sistema de archivos o storage
+        console.log(
+          "Archivo de imagen recibido:",
+          datosOriginales.imagen_resultado.name
+        );
+      } catch (errorArchivo) {
+        console.error("Error procesando archivo:", errorArchivo);
+        // Continuar sin la imagen si hay error
+      }
+    }
+
     // Insertar nueva graduación
     const consultaInsertar = `
       INSERT INTO graduaciones (
@@ -127,7 +164,7 @@ export async function POST(request) {
       datosLimpios.oi_cilindro ? parseFloat(datosLimpios.oi_cilindro) : null,
       datosLimpios.oi_eje ? parseInt(datosLimpios.oi_eje) : null,
       datosLimpios.oi_adicion ? parseFloat(datosLimpios.oi_adicion) : null,
-      datosLimpios.imagen_resultado || null,
+      rutaImagen, // Usar la ruta de imagen procesada
       datosLimpios.fecha_examen || new Date().toISOString().split("T")[0],
       datosLimpios.notas || null,
     ];
@@ -159,17 +196,33 @@ export async function POST(request) {
   }
 }
 
-// PUT - Actualizar graduación existente
+// PUT - Actualizar graduación existente ✅ ARREGLADO
 export async function PUT(request) {
   try {
-    const datosOriginales = await request.json();
-    const { id } = datosOriginales;
+    // ARREGLO: Obtener ID desde la URL query parameter, no desde el body
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json(
         { error: "ID de graduación requerido" },
         { status: 400 }
       );
+    }
+
+    // Manejar FormData
+    const formData = await request.formData();
+
+    // Convertir FormData a objeto
+    const datosOriginales = {};
+    for (const [key, value] of formData.entries()) {
+      if (key === "imagen_resultado" && value instanceof File) {
+        if (value.size > 0) {
+          datosOriginales[key] = value;
+        }
+      } else {
+        datosOriginales[key] = value;
+      }
     }
 
     // Limpiar y validar datos
@@ -188,7 +241,7 @@ export async function PUT(request) {
 
     // Verificar que la graduación existe
     const verificarGraduacion = await ejecutarConsulta(
-      "SELECT id FROM graduaciones WHERE id = $1",
+      "SELECT id, imagen_resultado FROM graduaciones WHERE id = $1",
       [id]
     );
 
@@ -197,6 +250,26 @@ export async function PUT(request) {
         { error: "Graduación no encontrada" },
         { status: 404 }
       );
+    }
+
+    // Manejar subida de archivo si existe
+    let rutaImagen = verificarGraduacion.rows[0].imagen_resultado; // Mantener la imagen existente
+
+    if (
+      datosOriginales.imagen_resultado &&
+      datosOriginales.imagen_resultado instanceof File
+    ) {
+      try {
+        rutaImagen = `graduaciones/${Date.now()}-${
+          datosOriginales.imagen_resultado.name
+        }`;
+        console.log(
+          "Archivo de imagen actualizado:",
+          datosOriginales.imagen_resultado.name
+        );
+      } catch (errorArchivo) {
+        console.error("Error procesando archivo:", errorArchivo);
+      }
     }
 
     // Actualizar graduación
@@ -211,7 +284,7 @@ export async function PUT(request) {
     `;
 
     const parametros = [
-      id,
+      id, // ✅ Usar el ID obtenido desde la URL
       datosLimpios.od_esfera ? parseFloat(datosLimpios.od_esfera) : null,
       datosLimpios.od_cilindro ? parseFloat(datosLimpios.od_cilindro) : null,
       datosLimpios.od_eje ? parseInt(datosLimpios.od_eje) : null,
@@ -220,19 +293,30 @@ export async function PUT(request) {
       datosLimpios.oi_cilindro ? parseFloat(datosLimpios.oi_cilindro) : null,
       datosLimpios.oi_eje ? parseInt(datosLimpios.oi_eje) : null,
       datosLimpios.oi_adicion ? parseFloat(datosLimpios.oi_adicion) : null,
-      datosLimpios.imagen_resultado || null,
+      rutaImagen,
       datosLimpios.fecha_examen || new Date().toISOString().split("T")[0],
       datosLimpios.notas || null,
     ];
 
     const resultado = await ejecutarConsulta(consultaActualizar, parametros);
 
-    return NextResponse.json({
-      mensaje: "Graduación actualizada exitosamente",
-      graduacion: resultado.rows[0],
-    });
+    return NextResponse.json(
+      {
+        mensaje: "Graduación actualizada exitosamente",
+        graduacion: resultado.rows[0],
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error actualizando graduación:", error);
+
+    if (error.code === "23503") {
+      return NextResponse.json(
+        { error: "Graduación no encontrada" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Error actualizando graduación" },
       { status: 500 }

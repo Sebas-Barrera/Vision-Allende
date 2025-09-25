@@ -452,47 +452,259 @@ export default function GeneradorReportes() {
                   📊 Estadísticas del Reporte
                 </h3>
 
-                {configuracion.tipo_reporte === "general" && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {vistaPrevia.estadisticas.total_ventas}
-                      </div>
-                      <div className="text-xs text-blue-800">Total Ventas</div>
-                    </div>
+                {configuracion.tipo_reporte === "general" &&
+                  vistaPrevia.ventas && (
+                    <div className="space-y-8">
+                      {/* TABLA GENERAL - TODAS LAS VENTAS */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                          📋 Reporte General - Todas las Ventas
+                        </h3>
 
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">
-                        {formatearDinero(
-                          vistaPrevia.estadisticas.total_vendido
-                        )}
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-12 py-6 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                  Fecha
+                                </th>
+                                <th className="px-12 py-6 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                  Total
+                                </th>
+                                <th className="px-12 py-6 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                  DEPÓSITO
+                                </th>
+                                <th className="px-12 py-6 text-left text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                  Saldo Restante
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {vistaPrevia.ventas.map((venta, index) => (
+                                <tr key={index} className="hover:bg-gray-50">
+                                  <td className="px-12 py-6 whitespace-nowrap text-sm text-gray-900">
+                                    {new Date(
+                                      venta.fecha_venta
+                                    ).toLocaleDateString("es-MX")}
+                                  </td>
+                                  <td className="px-12 py-6 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    ${parseFloat(venta.total || 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-12 py-6 whitespace-nowrap text-sm text-green-600 font-medium">
+                                    $
+                                    {parseFloat(
+                                      venta.total_depositado || 0
+                                    ).toFixed(2)}
+                                  </td>
+                                  <td className="px-12 py-6 whitespace-nowrap text-sm text-red-600 font-medium">
+                                    $
+                                    {parseFloat(
+                                      venta.saldo_restante || 0
+                                    ).toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                      <div className="text-xs text-green-800">
-                        Monto Vendido
-                      </div>
-                    </div>
 
-                    <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {formatearDinero(
-                          vistaPrevia.estadisticas.total_depositado
-                        )}
-                      </div>
-                      <div className="text-xs text-purple-800">
-                        Total Cobrado
-                      </div>
-                    </div>
+                      {/* TABLA EFECTIVO */}
+                      {vistaPrevia.ventasEfectivo &&
+                        vistaPrevia.ventasEfectivo.length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                              💵 Ventas en Efectivo
+                            </h3>
 
-                    <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <div className="text-2xl font-bold text-red-600">
-                        {formatearDinero(
-                          vistaPrevia.estadisticas.total_pendiente
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-green-50">
+                                  <tr>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-green-900 uppercase tracking-wider">
+                                      Fecha
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-green-900 uppercase tracking-wider">
+                                      Total
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-green-900 uppercase tracking-wider">
+                                      DEPÓSITO
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-green-900 uppercase tracking-wider">
+                                      Saldo Restante
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {vistaPrevia.ventasEfectivo.map(
+                                    (venta, index) => (
+                                      <tr
+                                        key={index}
+                                        className="hover:bg-green-50"
+                                      >
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-gray-900">
+                                          {new Date(
+                                            venta.fecha_venta
+                                          ).toLocaleDateString("es-MX")}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm font-medium text-gray-900">
+                                          $
+                                          {parseFloat(venta.total || 0).toFixed(
+                                            2
+                                          )}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-green-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.deposito || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-red-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.saldo_restante || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                         )}
-                      </div>
-                      <div className="text-xs text-red-800">Por Cobrar</div>
+
+                      {/* TABLA TARJETA */}
+                      {vistaPrevia.ventasTarjeta &&
+                        vistaPrevia.ventasTarjeta.length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                              💳 Ventas con Tarjeta
+                            </h3>
+
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-blue-50">
+                                  <tr>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-blue-900 uppercase tracking-wider">
+                                      Fecha
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-blue-900 uppercase tracking-wider">
+                                      Total
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-blue-900 uppercase tracking-wider">
+                                      DEPÓSITO
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-blue-900 uppercase tracking-wider">
+                                      Saldo Restante
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {vistaPrevia.ventasTarjeta.map(
+                                    (venta, index) => (
+                                      <tr
+                                        key={index}
+                                        className="hover:bg-blue-50"
+                                      >
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-gray-900">
+                                          {new Date(
+                                            venta.fecha_venta
+                                          ).toLocaleDateString("es-MX")}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm font-medium text-gray-900">
+                                          $
+                                          {parseFloat(venta.total || 0).toFixed(
+                                            2
+                                          )}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-green-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.deposito || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-red-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.saldo_restante || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                      {/* TABLA TRANSFERENCIA */}
+                      {vistaPrevia.ventasTransferencia &&
+                        vistaPrevia.ventasTransferencia.length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                              🏦 Ventas por Transferencia
+                            </h3>
+
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-purple-50">
+                                  <tr>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-purple-900 uppercase tracking-wider">
+                                      Fecha
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-purple-900 uppercase tracking-wider">
+                                      Total
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-purple-900 uppercase tracking-wider">
+                                      DEPÓSITO
+                                    </th>
+                                    <th className="px-12 py-6 text-left text-sm font-semibold text-purple-900 uppercase tracking-wider">
+                                      Saldo Restante
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {vistaPrevia.ventasTransferencia.map(
+                                    (venta, index) => (
+                                      <tr
+                                        key={index}
+                                        className="hover:bg-purple-50"
+                                      >
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-gray-900">
+                                          {new Date(
+                                            venta.fecha_venta
+                                          ).toLocaleDateString("es-MX")}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm font-medium text-gray-900">
+                                          $
+                                          {parseFloat(venta.total || 0).toFixed(
+                                            2
+                                          )}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-green-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.deposito || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                        <td className="px-12 py-6 whitespace-nowrap text-sm text-red-600 font-medium">
+                                          $
+                                          {parseFloat(
+                                            venta.saldo_restante || 0
+                                          ).toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {(configuracion.tipo_reporte === "efectivo" ||
                   configuracion.tipo_reporte === "tarjeta" ||

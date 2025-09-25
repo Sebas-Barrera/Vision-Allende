@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ejecutarConsulta } from "@/lib/conexion-bd";
 import * as XLSX from "xlsx";
+import { parsearDinero, sumarDinero } from "@/lib/dinero-utils";
 
 // GET - Generar y descargar reportes en Excel
 export async function GET(request) {
@@ -188,37 +189,99 @@ async function generarReporteGeneral(periodoId, fechaInicio, fechaFin) {
     periodoNombre = `${fechaInicio} a ${fechaFin}`;
   }
 
-  // Consulta principal de ventas
-  const consultaVentas = `
+  // 1. CONSULTA GENERAL - TODAS LAS VENTAS
+  const consultaVentasGeneral = `
     SELECT 
-      v.numero_venta,
       v.fecha_venta,
-      c.nombre_completo as cliente,
-      c.expediente,
-      c.email,
-      c.celular,
-      v.marca_armazon,
-      v.laboratorio,
-      v.precio_armazon,
-      v.precio_micas,
-      v.costo_total,
+      COALESCE(v.precio_armazon, 0) + COALESCE(v.precio_micas, 0) as total,
       v.total_depositado,
-      v.saldo_restante,
-      v.estado,
-      v.fecha_llegada_laboratorio,
-      v.fecha_entrega_cliente,
-      v.notas,
-      p.nombre as periodo
+      v.saldo_restante
     FROM ventas v
     INNER JOIN clientes c ON v.cliente_id = c.id
     LEFT JOIN periodos_contables p ON v.periodo_id = p.id
     ${whereClause}
-    ORDER BY v.fecha_venta DESC, v.numero_venta
+    ORDER BY v.fecha_venta DESC
   `;
 
-  const resultadoVentas = await ejecutarConsulta(consultaVentas, parametros);
+  // 2. CONSULTA VENTAS EN EFECTIVO
+  const consultaVentasEfectivo = `
+    SELECT DISTINCT
+      v.fecha_venta,
+      COALESCE(v.precio_armazon, 0) + COALESCE(v.precio_micas, 0) as total,
+      COALESCE(SUM(d.monto), 0) as deposito,
+      v.saldo_restante
+    FROM ventas v
+    INNER JOIN clientes c ON v.cliente_id = c.id
+    INNER JOIN depositos d ON v.id = d.venta_id AND d.metodo_pago = 'efectivo'
+    LEFT JOIN periodos_contables p ON v.periodo_id = p.id
+    ${whereClause}
+    GROUP BY v.id, v.fecha_venta, v.precio_armazon, v.precio_micas, v.saldo_restante
+    ORDER BY v.fecha_venta DESC
+  `;
 
-  // Consulta de depósitos del período
+  // 3. CONSULTA VENTAS CON TARJETA
+  const consultaVentasTarjeta = `
+    SELECT DISTINCT
+      v.fecha_venta,
+      COALESCE(v.precio_armazon, 0) + COALESCE(v.precio_micas, 0) as total,
+      COALESCE(SUM(d.monto), 0) as deposito,
+      v.saldo_restante
+    FROM ventas v
+    INNER JOIN clientes c ON v.cliente_id = c.id
+    INNER JOIN depositos d ON v.id = d.venta_id AND d.metodo_pago = 'tarjeta'
+    LEFT JOIN periodos_contables p ON v.periodo_id = p.id
+    ${whereClause}
+    GROUP BY v.id, v.fecha_venta, v.precio_armazon, v.precio_micas, v.saldo_restante
+    ORDER BY v.fecha_venta DESC
+  `;
+
+  // 4. CONSULTA VENTAS POR TRANSFERENCIA
+  const consultaVentasTransferencia = `
+    SELECT DISTINCT
+      v.fecha_venta,
+      COALESCE(v.precio_armazon, 0) + COALESCE(v.precio_micas, 0) as total,
+      COALESCE(SUM(d.monto), 0) as deposito,
+      v.saldo_restante
+    FROM ventas v
+    INNER JOIN clientes c ON v.cliente_id = c.id
+    INNER JOIN depositos d ON v.id = d.venta_id AND d.metodo_pago = 'transferencia'
+    LEFT JOIN periodos_contables p ON v.periodo_id = p.id
+    ${whereClause}
+    GROUP BY v.id, v.fecha_venta, v.precio_armazon, v.precio_micas, v.saldo_restante
+    ORDER BY v.fecha_venta DESC
+  `;
+
+  // EJECUTAR TODAS LAS CONSULTAS
+  console.log("🔍 Ejecutando consultas de reporte general...");
+
+  const [
+    resultadoVentasGeneral,
+    resultadoVentasEfectivo,
+    resultadoVentasTarjeta,
+    resultadoVentasTransferencia,
+  ] = await Promise.all([
+    ejecutarConsulta(consultaVentasGeneral, parametros),
+    ejecutarConsulta(consultaVentasEfectivo, parametros).catch(() => ({
+      rows: [],
+    })),
+    ejecutarConsulta(consultaVentasTarjeta, parametros).catch(() => ({
+      rows: [],
+    })),
+    ejecutarConsulta(consultaVentasTransferencia, parametros).catch(() => ({
+      rows: [],
+    })),
+  ]);
+
+  console.log("📊 Resultados obtenidos:");
+  console.log("- Ventas generales:", resultadoVentasGeneral.rows.length);
+  console.log("- Ventas efectivo:", resultadoVentasEfectivo.rows.length);
+  console.log("- Ventas tarjeta:", resultadoVentasTarjeta.rows.length);
+  console.log(
+    "- Ventas transferencia:",
+    resultadoVentasTransferencia.rows.length
+  );
+
+  // Consulta de depósitos (para estadísticas)
   const consultaDepositos = `
     SELECT 
       d.fecha_deposito,
@@ -243,13 +306,16 @@ async function generarReporteGeneral(periodoId, fechaInicio, fechaFin) {
 
   // Calcular estadísticas
   const estadisticas = calcularEstadisticas(
-    resultadoVentas.rows,
+    resultadoVentasGeneral.rows,
     resultadoDepositos.rows
   );
 
   return {
     periodo_nombre: periodoNombre,
-    ventas: resultadoVentas.rows,
+    ventas: resultadoVentasGeneral.rows,
+    ventasEfectivo: resultadoVentasEfectivo.rows,
+    ventasTarjeta: resultadoVentasTarjeta.rows,
+    ventasTransferencia: resultadoVentasTransferencia.rows,
     depositos: resultadoDepositos.rows,
     estadisticas,
     fecha_generacion: new Date().toISOString(),
@@ -398,45 +464,70 @@ function calcularEstadisticas(ventas, depositos) {
 }
 
 function generarArchivoExcel(datos, tipoReporte) {
+  console.log("📝 Generando archivo Excel para tipo:", tipoReporte);
+  console.log("📊 Datos recibidos:", {
+    ventas: datos.ventas?.length || 0,
+    ventasEfectivo: datos.ventasEfectivo?.length || 0,
+    ventasTarjeta: datos.ventasTarjeta?.length || 0,
+    ventasTransferencia: datos.ventasTransferencia?.length || 0,
+  });
+
+  // Crear libro de Excel
   const workbook = XLSX.utils.book_new();
 
-  if (tipoReporte === "todos") {
-    // Reporte completo - múltiples hojas
+  if (tipoReporte === "general") {
+    // 🔥 REPORTE GENERAL - SIEMPRE CREAR 4 HOJAS
 
-    // Hoja 1: Resumen General
-    const resumen = generarHojaResumen(datos);
-    XLSX.utils.book_append_sheet(workbook, resumen, "Resumen");
-
-    // Hoja 2: Todas las ventas
+    // HOJA 1: TODAS LAS VENTAS (GENERAL)
+    console.log("📋 Creando hoja: Todas las Ventas");
     const ventasSheet = generarHojaVentas(
-      datos.general.ventas,
+      datos.ventas || [],
       "Todas las Ventas"
     );
     XLSX.utils.book_append_sheet(workbook, ventasSheet, "Todas las Ventas");
 
-    // Hoja 3: Depósitos Efectivo
-    if (datos.efectivo.depositos.length > 0) {
-      const efectivoSheet = generarHojaDepositos(
-        datos.efectivo.depositos,
-        "Efectivo"
+    // HOJA 2: VENTAS EN EFECTIVO
+    console.log("💵 Creando hoja: Efectivo");
+    const efectivoSheet = generarHojaVentasEfectivo(datos.ventasEfectivo || []);
+    XLSX.utils.book_append_sheet(workbook, efectivoSheet, "Efectivo");
+
+    // HOJA 3: VENTAS CON TARJETA
+    console.log("💳 Creando hoja: Tarjeta");
+    const tarjetaSheet = generarHojaVentasTarjeta(datos.ventasTarjeta || []);
+    XLSX.utils.book_append_sheet(workbook, tarjetaSheet, "Tarjeta");
+
+    // HOJA 4: VENTAS POR TRANSFERENCIA
+    console.log("🏦 Creando hoja: Transferencia");
+    const transferenciaSheet = generarHojaVentasTransferencia(
+      datos.ventasTransferencia || []
+    );
+    XLSX.utils.book_append_sheet(workbook, transferenciaSheet, "Transferencia");
+
+    console.log("✅ Se crearon 4 hojas en el archivo Excel");
+  } else if (tipoReporte === "todos") {
+    // Reporte completo con resumen
+    if (datos.general) {
+      const resumenSheet = generarHojaResumen(datos);
+      XLSX.utils.book_append_sheet(workbook, resumenSheet, "Resumen");
+
+      const ventasSheet = generarHojaVentas(
+        datos.general.ventas,
+        "Todas las Ventas"
+      );
+      XLSX.utils.book_append_sheet(workbook, ventasSheet, "Todas las Ventas");
+
+      const efectivoSheet = generarHojaVentasEfectivo(
+        datos.general.ventasEfectivo || []
       );
       XLSX.utils.book_append_sheet(workbook, efectivoSheet, "Efectivo");
-    }
 
-    // Hoja 4: Depósitos Tarjeta
-    if (datos.tarjeta.depositos.length > 0) {
-      const tarjetaSheet = generarHojaDepositos(
-        datos.tarjeta.depositos,
-        "Tarjeta"
+      const tarjetaSheet = generarHojaVentasTarjeta(
+        datos.general.ventasTarjeta || []
       );
       XLSX.utils.book_append_sheet(workbook, tarjetaSheet, "Tarjeta");
-    }
 
-    // Hoja 5: Depósitos Transferencia
-    if (datos.transferencia.depositos.length > 0) {
-      const transferenciaSheet = generarHojaDepositos(
-        datos.transferencia.depositos,
-        "Transferencia"
+      const transferenciaSheet = generarHojaVentasTransferencia(
+        datos.general.ventasTransferencia || []
       );
       XLSX.utils.book_append_sheet(
         workbook,
@@ -444,10 +535,6 @@ function generarArchivoExcel(datos, tipoReporte) {
         "Transferencia"
       );
     }
-  } else if (tipoReporte === "general") {
-    // Solo ventas
-    const ventasSheet = generarHojaVentas(datos.ventas, "Reporte de Ventas");
-    XLSX.utils.book_append_sheet(workbook, ventasSheet, "Ventas");
   } else {
     // Reporte específico por método de pago
     const depositosSheet = generarHojaDepositos(
@@ -518,48 +605,184 @@ function generarHojaResumen(datos) {
 }
 
 function generarHojaVentas(ventas, titulo) {
-  const headers = [
-    "Número de Venta",
-    "Fecha",
-    "Cliente",
-    "Expediente",
-    "Email",
-    "Celular",
-    "Marca Armazón",
-    "Laboratorio",
-    "Precio Armazón",
-    "Precio Micas",
-    "Costo Total",
-    "Total Depositado",
-    "Saldo Restante",
-    "Estado",
-    "Fecha Llegada Lab",
-    "Fecha Entrega",
-    "Notas",
-  ];
+  const headers = ["Fecha", "Total", "DEPÓSITO", "Saldo Restante"];
 
   const filas = ventas.map((venta) => [
-    venta.numero_venta,
     venta.fecha_venta,
-    venta.cliente,
-    venta.expediente || "",
-    venta.email || "",
-    venta.celular || "",
-    venta.marca_armazon || "",
-    venta.laboratorio || "",
-    parseFloat(venta.precio_armazon || 0),
-    parseFloat(venta.precio_micas || 0),
-    parseFloat(venta.costo_total),
-    parseFloat(venta.total_depositado),
-    parseFloat(venta.saldo_restante),
-    venta.estado,
-    venta.fecha_llegada_laboratorio || "",
-    venta.fecha_entrega_cliente || "",
-    venta.notas || "",
+    parsearDinero(
+      venta.total ||
+        sumarDinero(venta.precio_armazon || 0, venta.precio_micas || 0)
+    ),
+    parsearDinero(venta.total_depositado || venta.deposito || 0),
+    parsearDinero(venta.saldo_restante || 0),
   ]);
 
-  const data = [headers, ...filas];
-  return XLSX.utils.aoa_to_sheet(data);
+  // Calcular totales DE FORMA SEGURA
+  const totalCol2 = filas.reduce((sum, fila) => sumarDinero(sum, fila[1]), 0);
+  const totalCol3 = filas.reduce((sum, fila) => sumarDinero(sum, fila[2]), 0);
+  const totalCol4 = filas.reduce((sum, fila) => sumarDinero(sum, fila[3]), 0);
+
+  // Agregar datos + fila vacía + fila de totales
+  const data = [
+    headers,
+    ...filas,
+    ["", "", "", ""], // Fila vacía
+    ["TOTAL", totalCol2, totalCol3, totalCol4], // Fila de totales
+  ];
+
+  const sheet = XLSX.utils.aoa_to_sheet(data);
+
+  // Configurar ancho de columnas
+  sheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 18 }];
+
+  // CENTRAR TODO EL CONTENIDO
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!sheet[cellAddress]) continue;
+
+      if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+      sheet[cellAddress].s.alignment = {
+        horizontal: "center",
+        vertical: "center",
+      };
+    }
+  }
+
+  return sheet;
+}
+
+function generarHojaVentasEfectivo(ventasEfectivo) {
+  const headers = ["Fecha", "Total", "DEPÓSITO", "Saldo Restante"];
+
+  const filas = ventasEfectivo.map((venta) => [
+    venta.fecha_venta,
+    parsearDinero(venta.total || 0),
+    parsearDinero(venta.deposito || 0),
+    parsearDinero(venta.saldo_restante || 0),
+  ]);
+
+  // Calcular totales de forma segura
+  const totalCol2 = filas.reduce((sum, fila) => sumarDinero(sum, fila[1]), 0);
+  const totalCol3 = filas.reduce((sum, fila) => sumarDinero(sum, fila[2]), 0);
+  const totalCol4 = filas.reduce((sum, fila) => sumarDinero(sum, fila[3]), 0);
+
+  const data = [
+    headers,
+    ...filas,
+    ["", "", "", ""],
+    ["TOTAL", totalCol2, totalCol3, totalCol4],
+  ];
+
+  const sheet = XLSX.utils.aoa_to_sheet(data);
+
+  sheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 18 }];
+
+  // Centrar contenido
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!sheet[cellAddress]) continue;
+
+      if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+      sheet[cellAddress].s.alignment = {
+        horizontal: "center",
+        vertical: "center",
+      };
+    }
+  }
+
+  return sheet;
+}
+
+function generarHojaVentasTarjeta(ventasTarjeta) {
+  const headers = ["Fecha", "Total", "DEPÓSITO", "Saldo Restante"];
+
+  const filas = ventasTarjeta.map((venta) => [
+    venta.fecha_venta,
+    parsearDinero(venta.total || 0),
+    parsearDinero(venta.deposito || 0),
+    parsearDinero(venta.saldo_restante || 0),
+  ]);
+
+  // Calcular totales de forma segura
+  const totalCol2 = filas.reduce((sum, fila) => sumarDinero(sum, fila[1]), 0);
+  const totalCol3 = filas.reduce((sum, fila) => sumarDinero(sum, fila[2]), 0);
+  const totalCol4 = filas.reduce((sum, fila) => sumarDinero(sum, fila[3]), 0);
+
+  const data = [
+    headers,
+    ...filas,
+    ["", "", "", ""],
+    ["TOTAL", totalCol2, totalCol3, totalCol4],
+  ];
+
+  const sheet = XLSX.utils.aoa_to_sheet(data);
+
+  sheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 18 }];
+
+  // Centrar contenido
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!sheet[cellAddress]) continue;
+
+      if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+      sheet[cellAddress].s.alignment = {
+        horizontal: "center",
+        vertical: "center",
+      };
+    }
+  }
+
+  return sheet;
+}
+
+function generarHojaVentasTransferencia(ventasTransferencia) {
+  const headers = ["Fecha", "Total", "DEPÓSITO", "Saldo Restante"];
+
+  const filas = ventasTransferencia.map((venta) => [
+    venta.fecha_venta,
+    parsearDinero(venta.total || 0),
+    parsearDinero(venta.deposito || 0),
+    parsearDinero(venta.saldo_restante || 0),
+  ]);
+
+  // Calcular totales de forma segura
+  const totalCol2 = filas.reduce((sum, fila) => sumarDinero(sum, fila[1]), 0);
+  const totalCol3 = filas.reduce((sum, fila) => sumarDinero(sum, fila[2]), 0);
+  const totalCol4 = filas.reduce((sum, fila) => sumarDinero(sum, fila[3]), 0);
+
+  const data = [
+    headers,
+    ...filas,
+    ["", "", "", ""],
+    ["TOTAL", totalCol2, totalCol3, totalCol4],
+  ];
+
+  const sheet = XLSX.utils.aoa_to_sheet(data);
+
+  sheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 18 }];
+
+  // Centrar contenido
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!sheet[cellAddress]) continue;
+
+      if (!sheet[cellAddress].s) sheet[cellAddress].s = {};
+      sheet[cellAddress].s.alignment = {
+        horizontal: "center",
+        vertical: "center",
+      };
+    }
+  }
+
+  return sheet;
 }
 
 function generarHojaDepositos(depositos, titulo) {

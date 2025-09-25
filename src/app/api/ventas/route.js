@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { ejecutarConsulta, ejecutarTransaccion } from "@/lib/conexion-bd";
 import { validarVenta, limpiarDatos } from "@/lib/validaciones";
 import { generarNumeroVenta } from "@/lib/autenticacion";
+import { parsearDinero, sumarDinero, restarDinero } from "@/lib/dinero-utils";
 
-// GET - Obtener todas las ventas
+// GET - Obtener todas las ventas (mantén tu código GET existente)
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,7 +27,7 @@ export async function GET(request) {
         COUNT(d.id) as total_depositos_registrados,
         COALESCE(SUM(d.monto), 0) as total_depositado_real
       FROM ventas v
-      INNER JOIN clientes c ON v.cliente_id = c.id
+      LEFT JOIN clientes c ON v.cliente_id = c.id
       LEFT JOIN periodos_contables p ON v.periodo_id = p.id
       LEFT JOIN depositos d ON v.id = d.venta_id
     `;
@@ -34,61 +35,61 @@ export async function GET(request) {
     const parametros = [];
     let whereConditions = [];
 
-    // Filtrar por búsqueda (número de venta o cliente)
+    // Filtrar por búsqueda (número de venta o nombre de cliente)
     if (busqueda) {
       whereConditions.push(
-        `(v.numero_venta ILIKE $${
-          parametros.length + 1
-        } OR c.nombre_completo ILIKE $${parametros.length + 1})`
+        "(v.numero_venta ILIKE $" +
+          (parametros.length + 1) +
+          " OR c.nombre_completo ILIKE $" +
+          (parametros.length + 2) +
+          ")"
       );
-      parametros.push(`%${busqueda}%`);
+      parametros.push(`%${busqueda}%`, `%${busqueda}%`);
     }
 
     // Filtrar por estado
     if (estado) {
-      whereConditions.push(`v.estado = $${parametros.length + 1}`);
-      parametros.push(estado);
+      if (estado === "pagado") {
+        // Estado especial: pagado = saldo restante 0 o menos
+        whereConditions.push("v.saldo_restante <= 0");
+      } else if (estado === "adeudo") {
+        // Estado especial: adeudo = saldo restante mayor a 0
+        whereConditions.push("v.saldo_restante > 0");
+      } else {
+        // Estados normales: pendiente, en_laboratorio, listo, entregado, cancelado
+        whereConditions.push("v.estado = $" + (parametros.length + 1));
+        parametros.push(estado);
+      }
     }
 
-    // Filtrar por cliente
+    // Filtrar por cliente específico
     if (clienteId) {
-      whereConditions.push(`v.cliente_id = $${parametros.length + 1}`);
+      whereConditions.push("v.cliente_id = $" + (parametros.length + 1));
       parametros.push(clienteId);
     }
 
-    // Agregar condiciones WHERE si existen
     if (whereConditions.length > 0) {
-      consulta += ` WHERE ${whereConditions.join(" AND ")}`;
+      consulta += " WHERE " + whereConditions.join(" AND ");
     }
 
-    consulta += `
-      GROUP BY v.id, c.nombre_completo, c.expediente, c.email, c.celular, p.nombre
-      ORDER BY v.fecha_venta DESC, v.fecha_creacion DESC
-      LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}
-    `;
-
+    consulta +=
+      " GROUP BY v.id, c.nombre_completo, c.expediente, c.email, c.celular, p.nombre ORDER BY v.fecha_creacion DESC LIMIT $" +
+      (parametros.length + 1) +
+      " OFFSET $" +
+      (parametros.length + 2);
     parametros.push(limite, offset);
-
-    console.log("Ejecutando consulta ventas:", consulta);
-    console.log("Parámetros:", parametros);
 
     const resultado = await ejecutarConsulta(consulta, parametros);
 
     // Obtener estadísticas generales
-    const consultaEstadisticas = `
+    const estadisticas = await ejecutarConsulta(`
       SELECT 
         COUNT(*) as total_ventas,
-        COUNT(CASE WHEN estado = 'pendiente' THEN 1 END) as pendientes,
-        COUNT(CASE WHEN estado = 'en_laboratorio' THEN 1 END) as en_laboratorio,
-        COUNT(CASE WHEN estado = 'listo' THEN 1 END) as listos,
-        COUNT(CASE WHEN estado = 'entregado' THEN 1 END) as entregados,
-        COALESCE(SUM(costo_total), 0) as total_ingresos,
-        COALESCE(SUM(total_depositado), 0) as total_depositado,
-        COALESCE(SUM(saldo_restante), 0) as total_pendiente_cobro
+        COALESCE(SUM(costo_total), 0) as total_vendido,
+        COALESCE(SUM(saldo_restante), 0) as total_pendiente,
+        COUNT(CASE WHEN saldo_restante <= 0 THEN 1 END) as ventas_pagadas
       FROM ventas
-    `;
-
-    const estadisticas = await ejecutarConsulta(consultaEstadisticas);
+    `);
 
     return NextResponse.json({
       ventas: resultado.rows,
@@ -108,13 +109,28 @@ export async function GET(request) {
   }
 }
 
-// POST - Crear nueva venta
+// POST - Crear nueva venta (CORREGIDO PARA MANEJAR FORMDATA)
 export async function POST(request) {
   try {
-    const datosOriginales = await request.json();
+    // CAMBIO PRINCIPAL: Manejar FormData en lugar de JSON
+    const formData = await request.formData();
 
-    // Limpiar y validar datos
-    const datosLimpios = limpiarDatos(datosOriginales);
+    // Convertir FormData a objeto
+    const datosOriginales = {};
+    for (const [key, value] of formData.entries()) {
+      // Si el valor es un archivo, manejarlo por separado
+      if (key === "imagen_receta" && value instanceof File) {
+        datosOriginales[key] = value;
+      } else {
+        datosOriginales[key] = value;
+      }
+    }
+
+    // Limpiar y validar datos (excluyendo archivos de la validación)
+    const datosParaValidar = { ...datosOriginales };
+    delete datosParaValidar.imagen_receta; // Remover archivo antes de validar
+
+    const datosLimpios = limpiarDatos(datosParaValidar);
     const validacion = validarVenta(datosLimpios);
 
     if (!validacion.esValido) {
@@ -140,6 +156,29 @@ export async function POST(request) {
       );
     }
 
+    // Manejar archivo de imagen si existe
+    let rutaImagen = null;
+    if (
+      datosOriginales.imagen_receta &&
+      datosOriginales.imagen_receta instanceof File
+    ) {
+      try {
+        // Aquí puedes implementar la lógica para guardar el archivo
+        // Por ahora, solo guardaremos la referencia del nombre del archivo
+        rutaImagen = `recetas/${Date.now()}_${
+          datosOriginales.imagen_receta.name
+        }`;
+
+        // TODO: Implementar guardado real del archivo
+        // const buffer = await datosOriginales.imagen_receta.arrayBuffer();
+        // const bytes = new Uint8Array(buffer);
+        // await fs.writeFile(`uploads/${rutaImagen}`, bytes);
+      } catch (error) {
+        console.error("Error procesando imagen:", error);
+        // No fallar por el archivo, solo continuar sin imagen
+      }
+    }
+
     // Crear venta y depósito inicial en transacción
     const resultado = await ejecutarTransaccion(async (cliente) => {
       // Generar número de venta único
@@ -157,83 +196,87 @@ export async function POST(request) {
 
       // Si no hay período activo, crear uno
       if (!periodoId) {
-        const hoy = new Date();
-        const mesActual = hoy.getMonth();
-        const añoActual = hoy.getFullYear();
+        const fechaActual = new Date();
 
-        const fechaInicio = new Date(añoActual, mesActual, 7);
-        const fechaFin = new Date(añoActual, mesActual + 1, 6);
+        // Calcular fechas del período (del día 7 de este mes al día 6 del siguiente)
+        const anio = fechaActual.getFullYear();
+        const mes = fechaActual.getMonth(); // 0-based (0 = enero)
 
-        const meses = [
-          "Enero",
-          "Febrero",
-          "Marzo",
-          "Abril",
-          "Mayo",
-          "Junio",
-          "Julio",
-          "Agosto",
-          "Septiembre",
-          "Octubre",
-          "Noviembre",
-          "Diciembre",
-        ];
-        const nombrePeriodo = `${meses[mesActual]} / ${
-          meses[(mesActual + 1) % 12]
-        }`;
+        // Fecha de inicio: día 7 del mes actual
+        const fechaInicio = new Date(anio, mes, 7);
 
-        const consultaNuevoPeriodo = `
+        // Si estamos antes del día 7, el período anterior aún está activo
+        // Crear período que inicia el día 7 de este mes
+        if (fechaActual.getDate() < 7) {
+          fechaInicio.setMonth(mes - 1); // Mes anterior
+        }
+
+        // Fecha fin: día 6 del siguiente mes
+        const fechaFin = new Date(fechaInicio);
+        fechaFin.setMonth(fechaInicio.getMonth() + 1);
+        fechaFin.setDate(6);
+
+        // Nombre del período
+        const mesInicio = fechaInicio.toLocaleDateString("es-MX", {
+          month: "long",
+          year: "numeric",
+        });
+        const mesFin = fechaFin.toLocaleDateString("es-MX", {
+          month: "long",
+          year: "numeric",
+        });
+        const nombrePeriodo = `${mesInicio} / ${mesFin}`;
+
+        const consultaCrearPeriodo = `
           INSERT INTO periodos_contables (nombre, fecha_inicio, fecha_fin, activo)
           VALUES ($1, $2, $3, true)
           RETURNING id
         `;
-
-        const nuevoPeriodo = await cliente.query(consultaNuevoPeriodo, [
+        const nuevoPeriodo = await cliente.query(consultaCrearPeriodo, [
           nombrePeriodo,
-          fechaInicio.toISOString().split("T")[0],
+          fechaInicio.toISOString().split("T")[0], // Solo la fecha (YYYY-MM-DD)
           fechaFin.toISOString().split("T")[0],
         ]);
-
         periodoId = nuevoPeriodo.rows[0].id;
       }
+
+      // Calcular saldo restante
+      const costoTotal = parsearDinero(datosLimpios.costo_total);
+      const depositoInicial = parsearDinero(datosLimpios.deposito_inicial);
+      const saldoRestante = restarDinero(costoTotal, depositoInicial);
 
       // Insertar venta
       const consultaVenta = `
         INSERT INTO ventas (
-          numero_venta, cliente_id, periodo_id, marca_armazon, laboratorio,
-          precio_armazon, precio_micas, costo_total, total_depositado, saldo_restante,
-          imagen_receta, estado, fecha_llegada_laboratorio, fecha_entrega_cliente,
-          fecha_venta, notas
+          numero_venta, cliente_id, marca_armazon, laboratorio, 
+          precio_armazon, precio_micas, costo_total, saldo_restante, 
+          estado, fecha_venta, fecha_llegada_laboratorio, fecha_entrega_cliente,
+          notas, imagen_receta, periodo_id
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
         ) RETURNING *
       `;
 
       const parametrosVenta = [
         numeroVenta,
         datosLimpios.cliente_id,
-        periodoId,
         datosLimpios.marca_armazon || null,
         datosLimpios.laboratorio || null,
         datosLimpios.precio_armazon
-          ? parseFloat(datosLimpios.precio_armazon)
+          ? parsearDinero(datosLimpios.precio_armazon)
           : null,
         datosLimpios.precio_micas
-          ? parseFloat(datosLimpios.precio_micas)
+          ? parsearDinero(datosLimpios.precio_micas)
           : null,
-        parseFloat(datosLimpios.costo_total),
-        datosLimpios.deposito_inicial
-          ? parseFloat(datosLimpios.deposito_inicial)
-          : 0,
-        datosLimpios.saldo_restante
-          ? parseFloat(datosLimpios.saldo_restante)
-          : parseFloat(datosLimpios.costo_total),
-        datosLimpios.imagen_receta || null,
+        costoTotal,
+        saldoRestante,
         datosLimpios.estado || "pendiente",
+        datosLimpios.fecha_venta || new Date().toISOString().split("T")[0],
         datosLimpios.fecha_llegada_laboratorio || null,
         datosLimpios.fecha_entrega_cliente || null,
-        datosLimpios.fecha_venta || new Date().toISOString().split("T")[0],
         datosLimpios.notas || null,
+        rutaImagen, // Ruta de la imagen
+        periodoId,
       ];
 
       const resultadoVenta = await cliente.query(
@@ -243,50 +286,45 @@ export async function POST(request) {
       const ventaCreada = resultadoVenta.rows[0];
 
       // Si hay depósito inicial, registrarlo
-      if (
-        datosLimpios.deposito_inicial &&
-        parseFloat(datosLimpios.deposito_inicial) > 0
-      ) {
+      if (depositoInicial > 0) {
         const consultaDeposito = `
           INSERT INTO depositos (
             venta_id, monto, metodo_pago, fecha_deposito, notas
-          ) VALUES (
-            $1, $2, $3, $4, $5
-          )
+          ) VALUES ($1, $2, $3, $4, $5)
+          RETURNING *
         `;
 
-        const parametrosDeposito = [
+        await cliente.query(consultaDeposito, [
           ventaCreada.id,
-          parseFloat(datosLimpios.deposito_inicial),
-          "efectivo", // Por defecto, se puede cambiar después
+          depositoInicial,
+          "efectivo", // Default por ahora
           datosLimpios.fecha_venta || new Date().toISOString().split("T")[0],
           "Depósito inicial",
-        ];
-
-        await cliente.query(consultaDeposito, parametrosDeposito);
+        ]);
       }
 
       return ventaCreada;
     });
 
-    return NextResponse.json(
-      {
-        mensaje: "Venta registrada exitosamente",
-        venta: resultado,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({
+      mensaje: "Venta creada exitosamente",
+      venta: resultado,
+    });
   } catch (error) {
     console.error("Error creando venta:", error);
 
-    if (error.code === "23503") {
+    // Dar información más detallada del error
+    if (error.message.includes("invalid input syntax")) {
       return NextResponse.json(
-        { error: "Cliente no encontrado" },
-        { status: 404 }
+        {
+          error:
+            "Error en formato de datos. Verifique que los números estén correctos.",
+        },
+        { status: 400 }
       );
     }
 
-    if (error.code === "23505") {
+    if (error.message.includes("duplicate key")) {
       return NextResponse.json(
         { error: "Ya existe una venta con ese número" },
         { status: 409 }
@@ -294,171 +332,7 @@ export async function POST(request) {
     }
 
     return NextResponse.json(
-      { error: "Error registrando venta" },
-      { status: 500 }
-    );
-  }
-}
-
-// PUT - Actualizar venta existente
-export async function PUT(request) {
-  try {
-    const datosOriginales = await request.json();
-    const { id } = datosOriginales;
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "ID de venta requerido" },
-        { status: 400 }
-      );
-    }
-
-    // Limpiar y validar datos
-    const datosLimpios = limpiarDatos(datosOriginales);
-    const validacion = validarVenta(datosLimpios);
-
-    if (!validacion.esValido) {
-      return NextResponse.json(
-        {
-          error: "Datos inválidos",
-          errores: validacion.errores,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Verificar que la venta existe
-    const verificarVenta = await ejecutarConsulta(
-      "SELECT id FROM ventas WHERE id = $1",
-      [id]
-    );
-
-    if (verificarVenta.rows.length === 0) {
-      return NextResponse.json(
-        { error: "Venta no encontrada" },
-        { status: 404 }
-      );
-    }
-
-    // Actualizar venta
-    const consultaActualizar = `
-      UPDATE ventas SET
-        marca_armazon = $2,
-        laboratorio = $3,
-        precio_armazon = $4,
-        precio_micas = $5,
-        costo_total = $6,
-        imagen_receta = $7,
-        estado = $8,
-        fecha_llegada_laboratorio = $9,
-        fecha_entrega_cliente = $10,
-        fecha_venta = $11,
-        notas = $12,
-        fecha_actualizacion = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING *
-    `;
-
-    const parametros = [
-      id,
-      datosLimpios.marca_armazon || null,
-      datosLimpios.laboratorio || null,
-      datosLimpios.precio_armazon
-        ? parseFloat(datosLimpios.precio_armazon)
-        : null,
-      datosLimpios.precio_micas ? parseFloat(datosLimpios.precio_micas) : null,
-      parseFloat(datosLimpios.costo_total),
-      datosLimpios.imagen_receta || null,
-      datosLimpios.estado || "pendiente",
-      datosLimpios.fecha_llegada_laboratorio || null,
-      datosLimpios.fecha_entrega_cliente || null,
-      datosLimpios.fecha_venta || new Date().toISOString().split("T")[0],
-      datosLimpios.notas || null,
-    ];
-
-    const resultado = await ejecutarConsulta(consultaActualizar, parametros);
-
-    // Recalcular saldo restante basado en depósitos existentes
-    const consultaActualizarSaldo = `
-  UPDATE ventas 
-  SET 
-    total_depositado = (
-      SELECT COALESCE(SUM(monto), 0) 
-      FROM depositos 
-      WHERE venta_id = $1
-    ),
-    saldo_restante = costo_total - (
-      SELECT COALESCE(SUM(monto), 0) 
-      FROM depositos 
-      WHERE venta_id = $1
-    )
-  WHERE id = $1
-`;
-
-    await ejecutarConsulta(consultaActualizarSaldo, [id]);
-
-    return NextResponse.json({
-      mensaje: "Venta actualizada exitosamente",
-      venta: resultado.rows[0],
-    });
-  } catch (error) {
-    console.error("Error actualizando venta:", error);
-    return NextResponse.json(
-      { error: "Error actualizando venta" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE - Eliminar venta
-export async function DELETE(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "ID de venta requerido" },
-        { status: 400 }
-      );
-    }
-
-    // Verificar que la venta existe
-    const verificarVenta = await ejecutarConsulta(
-      "SELECT id, numero_venta, estado FROM ventas WHERE id = $1",
-      [id]
-    );
-
-    if (verificarVenta.rows.length === 0) {
-      return NextResponse.json(
-        { error: "Venta no encontrada" },
-        { status: 404 }
-      );
-    }
-
-    const venta = verificarVenta.rows[0];
-
-    // Solo permitir eliminación si la venta está en estado pendiente
-    if (venta.estado !== "pendiente") {
-      return NextResponse.json(
-        {
-          error: "Solo se pueden eliminar ventas en estado pendiente",
-          sugerencia: 'Cambie el estado a "cancelado" en su lugar',
-        },
-        { status: 409 }
-      );
-    }
-
-    // Eliminar venta (esto eliminará en cascada los depósitos)
-    await ejecutarConsulta("DELETE FROM ventas WHERE id = $1", [id]);
-
-    return NextResponse.json({
-      mensaje: "Venta eliminada exitosamente",
-    });
-  } catch (error) {
-    console.error("Error eliminando venta:", error);
-    return NextResponse.json(
-      { error: "Error eliminando venta" },
+      { error: "Error interno del servidor: " + error.message },
       { status: 500 }
     );
   }

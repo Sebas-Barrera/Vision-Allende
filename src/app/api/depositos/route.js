@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ejecutarConsulta, ejecutarTransaccion } from "@/lib/conexion-bd";
 import { validarDeposito, limpiarDatos } from "@/lib/validaciones";
+import { parsearDinero, sumarDinero, restarDinero } from "@/lib/dinero-utils";
 
 // GET - Obtener depósitos por venta o todos
 export async function GET(request) {
@@ -55,7 +56,7 @@ export async function GET(request) {
     let estadisticas = null;
     if (ventaId && resultado.rows.length > 0) {
       const totalDepositado = resultado.rows.reduce(
-        (sum, deposito) => sum + parseFloat(deposito.monto),
+        (sum, deposito) => sumarDinero(sum, deposito.monto),
         0
       );
       const costoTotal = parseFloat(resultado.rows[0].costo_total);
@@ -113,8 +114,8 @@ export async function POST(request) {
     }
 
     const venta = resultadoVenta.rows[0];
-    const saldoActual = parseFloat(venta.saldo_restante);
-    const montoDeposito = parseFloat(datosLimpios.monto);
+    const saldoActual = parsearDinero(venta.saldo_restante);
+    const montoDeposito = parsearDinero(datosLimpios.monto);
 
     // Validar depósito
     const validacion = validarDeposito(
