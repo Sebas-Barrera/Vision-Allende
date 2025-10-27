@@ -223,13 +223,13 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
                   Ventas
                 </h3>
-                <p className="text-3xl font-bold text-green-600 mt-2">
+                <div className="text-3xl font-bold text-green-600 mt-2">
                   {cargando ? (
                     <div className="w-12 h-8 bg-gray-200 rounded animate-pulse"></div>
                   ) : (
                     formatearNumero(estadisticas.ventas)
                   )}
-                </p>
+                </div>
                 <p className="text-sm text-gray-600 mt-1">Totales</p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
@@ -256,13 +256,13 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
                   Pendientes
                 </h3>
-                <p className="text-3xl font-bold text-yellow-600 mt-2">
+                <div className="text-3xl font-bold text-yellow-600 mt-2">
                   {cargando ? (
                     <div className="w-12 h-8 bg-gray-200 rounded animate-pulse"></div>
                   ) : (
                     formatearNumero(estadisticas.pendientes)
                   )}
-                </p>
+                </div>
                 <p className="text-sm text-gray-600 mt-1">Por cobrar</p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center">
@@ -289,7 +289,7 @@ export default function Dashboard() {
                 <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
                   Ingresos
                 </h3>
-                <p className="text-3xl font-bold text-purple-600 mt-2">
+                <div className="text-3xl font-bold text-purple-600 mt-2">
                   {cargando ? (
                     <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
                   ) : (
@@ -297,7 +297,7 @@ export default function Dashboard() {
                       {formatearDinero(estadisticas.ingresos)}
                     </span>
                   )}
-                </p>
+                </div>
                 <p className="text-sm text-gray-600 mt-1">Depositados</p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">

@@ -1,12 +1,8 @@
 import { Pool } from "pg";
 
-// Configuración con los datos exactos de NEON
+// Configuración usando variables de entorno
 const pool = new Pool({
-  host: "ep-sweet-leaf-ad5ujtjh-pooler.c-2.us-east-1.aws.neon.tech",
-  port: 5432,
-  database: "neondb",
-  user: "neondb_owner",
-  password: "npg_pRmuL2hCJ6aP",
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     require: true,
     rejectUnauthorized: false,
