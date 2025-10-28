@@ -8,6 +8,7 @@
 
 # Ignorar base de datos
 database.sql
+neon_backup.sql
 
 # testing
 /coverage
